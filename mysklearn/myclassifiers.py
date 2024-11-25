@@ -3,9 +3,14 @@ from mysklearn import myutils
 
 class MyRandomForestClassifier:
 
-    def __init__(self):
+    def __init__(self, N, M, F):
+        self.N = N
+        self.M = M
+        self.F = F
         self.X_train = None
         self.y_train = None
+        self.tree = []
+        self.select_tree = []
 
     def fit(self,X_train,y_train):
         self.X_train = X_train
