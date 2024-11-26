@@ -1,6 +1,6 @@
 import copy
 import csv
-from tabulate import tabulate
+# from tabulate import tabulate
 
 class MyPyTable:
     """Represents a 2D table of data with column names.
