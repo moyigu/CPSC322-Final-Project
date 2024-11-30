@@ -1,5 +1,6 @@
 import copy
 import csv
+import random
 # from tabulate import tabulate
 
 class MyPyTable:
@@ -113,6 +114,58 @@ class MyPyTable:
                 self.data.append(row)
             self.convert_to_numeric()
         return self
+    
+    def get_sample_data(self, column_name, true_count=5000, false_count=5000):
+        """Randomly choose 5000 True and 5000 False rows, ensuring total 10,000 rows.
+
+        Args:
+            column_name (str): The name of the column to filter.
+            true_count (int): The number of True rows to sample.
+            false_count (int): The number of False rows to sample.
+
+        Returns:
+            list: Final dataset containing exactly 10,000 rows.
+        """
+        # 找到目标列的索引
+        column_index = self.column_names.index(column_name)
+
+        # 初始化 True 和 False 的索引列表
+        true_indices = []
+        false_indices = []
+        for idx, row in enumerate(self.data):
+            value = row[column_index]
+            if value == True or value == 'True' or value == 1 or value == '1':
+                true_indices.append(idx)
+            elif value == False or value == 'False' or value == 0 or value == '0':
+                false_indices.append(idx)
+
+        # 检查数据量是否足够
+        if len(true_indices) < true_count or len(false_indices) < false_count:
+            raise ValueError("Not enough True or False values to sample.")
+
+        # 随机选择指定数量的索引
+        sampled_true_indices = random.sample(true_indices, true_count)
+        sampled_false_indices = random.sample(false_indices, false_count)
+
+        # 从数据中提取选中的行
+        sampled_data = [self.data[idx] for idx in sampled_true_indices + sampled_false_indices]
+
+        # 创建选中行的索引集合
+        sampled_indices_set = set(sampled_true_indices + sampled_false_indices)
+
+        # 获取剩余数据
+        remaining_data = [self.data[idx] for idx in range(len(self.data)) if idx not in sampled_indices_set]
+
+        # 确保总数为一万条数据
+        total_required = 10000
+        if len(sampled_data) < total_required:
+            additional_needed = total_required - len(sampled_data)
+            additional_data = random.sample(remaining_data, additional_needed)
+            sampled_data.extend(additional_data)
+
+        return sampled_data
+
+    
 
     def save_to_file(self, filename):
         """Save column names and data to a CSV file.
