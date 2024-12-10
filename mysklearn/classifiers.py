@@ -491,3 +491,70 @@ class MyDecisionTreeClassifier:
         # Ensure the generated PDF is saved in the required directory
         os.makedirs("tree_vis", exist_ok=True)
         os.rename(f"{dot_fname}.pdf", f"tree_vis/{pdf_fname}.pdf")
+    
+
+class MyRandomForestClassifier:
+    """Random Forest implementation using MyDecisionTreeClassifier."""
+
+    def __init__(self, n_trees=10, max_features=None, sample_size=0.8, max_ensemble_trees=None):
+        """
+        Initialize the Random Forest.
+        Args:
+            n_trees (int): Total number of trees (N).
+            max_features (int): Number of attributes to consider at each split (F).
+            sample_size (float): Fraction of the dataset to use for each tree.
+            max_ensemble_trees (int): Number of best trees to use in the final ensemble (M).
+        """
+        self.n_trees = n_trees
+        self.max_features = max_features
+        self.sample_size = sample_size
+        self.max_ensemble_trees = max_ensemble_trees
+        self.trees = []
+
+    def fit(self, X_train, y_train):
+        """Fit the Random Forest model."""
+        n_samples = len(X_train)
+        n_features = len(X_train[0])
+        self.max_features = self.max_features or int(n_features ** 0.5)
+
+        for _ in range(self.n_trees):
+            # Bootstrap sampling
+            sample_indices = random.choices(range(n_samples), k=int(n_samples * self.sample_size))
+            X_sample = [X_train[i] for i in sample_indices]
+            y_sample = [y_train[i] for i in sample_indices]
+
+            # Create and fit a decision tree
+            tree = MyDecisionTreeClassifier()
+            tree.fit(X_sample, y_sample)
+            self.trees.append((tree, sample_indices))
+
+        # Select the best subset of trees if M < N
+        if self.max_ensemble_trees and self.max_ensemble_trees < self.n_trees:
+            self._select_best_trees(X_train, y_train)
+
+    def _select_best_trees(self, X_train, y_train):
+        """Select the best subset of trees based on training accuracy."""
+        tree_accuracies = []
+        for tree, sample_indices in self.trees:
+            X_sample = [X_train[i] for i in sample_indices]
+            y_sample = [y_train[i] for i in sample_indices]
+            predictions = tree.predict(X_sample)
+            accuracy = sum(1 for y_true, y_pred in zip(y_sample, predictions) if y_true == y_pred) / len(y_sample)
+            tree_accuracies.append((tree, accuracy))
+
+        # Sort by accuracy and keep the top M trees
+        tree_accuracies.sort(key=lambda x: -x[1])
+        self.trees = [tree for tree, _ in tree_accuracies[:self.max_ensemble_trees]]
+
+    def predict(self, X_test):
+        """Predict the class labels for the input data."""
+        predictions = []
+        for instance in X_test:
+            votes = {}
+            for tree, _ in self.trees:
+                prediction = tree.predict([instance])[0]
+                votes[prediction] = votes.get(prediction, 0) + 1
+
+            # Majority voting
+            predictions.append(max(votes, key=votes.get))
+        return predictions
