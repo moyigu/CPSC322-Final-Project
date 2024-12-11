@@ -126,10 +126,8 @@ class MyPyTable:
         Returns:
             list: Final dataset containing exactly 10,000 rows.
         """
-        # 找到目标列的索引
         column_index = self.column_names.index(column_name)
 
-        # 初始化 True 和 False 的索引列表
         true_indices = []
         false_indices = []
         for idx, row in enumerate(self.data):
@@ -139,24 +137,18 @@ class MyPyTable:
             elif value == False or value == 'False' or value == 0 or value == '0':
                 false_indices.append(idx)
 
-        # 检查数据量是否足够
         if len(true_indices) < true_count or len(false_indices) < false_count:
             raise ValueError("Not enough True or False values to sample.")
 
-        # 随机选择指定数量的索引
         sampled_true_indices = random.sample(true_indices, true_count)
         sampled_false_indices = random.sample(false_indices, false_count)
 
-        # 从数据中提取选中的行
         sampled_data = [self.data[idx] for idx in sampled_true_indices + sampled_false_indices]
 
-        # 创建选中行的索引集合
         sampled_indices_set = set(sampled_true_indices + sampled_false_indices)
 
-        # 获取剩余数据
         remaining_data = [self.data[idx] for idx in range(len(self.data)) if idx not in sampled_indices_set]
 
-        # 确保总数为一万条数据
         total_required = 10000
         if len(sampled_data) < total_required:
             additional_needed = total_required - len(sampled_data)
@@ -165,7 +157,31 @@ class MyPyTable:
 
         return sampled_data
 
-    
+    def normalize_columns(self, col_names, method="min-max"):
+        """Normalize the specified columns in the table.
+
+        Args:
+            col_names (list of str): The names of the columns to normalize.
+            method (str): Normalization method ("min-max" or "z-score").
+        """
+        for col_name in col_names:
+            col_index = self.column_names.index(col_name)
+            values = [row[col_index] for row in self.data if row[col_index] != "NA"]
+
+            if method == "min-max":
+                min_val = min(values)
+                max_val = max(values)
+                for row in self.data:
+                    if row[col_index] != "NA":
+                        row[col_index] = (row[col_index] - min_val) / (max_val - min_val)
+            
+            elif method == "z-score":
+                mean_val = sum(values) / len(values)
+                std_val = (sum((x - mean_val) ** 2 for x in values) / len(values)) ** 0.5
+                for row in self.data:
+                    if row[col_index] != "NA":
+                        row[col_index] = (row[col_index] - mean_val) / std_val
+
 
     def save_to_file(self, filename):
         """Save column names and data to a CSV file.

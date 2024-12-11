@@ -7,7 +7,6 @@ Description: a class for pa7.ipynb.
 """
 import graphviz
 from mysklearn import myutils
-from mysklearn import utils
 from mysklearn.mysimplelinearregressor import MySimpleLinearRegressor
 import random
 from mysklearn import myevaluation
@@ -54,9 +53,11 @@ class MyDecisionTreeClassifier:
         """
         self.X_train = X_train
         self.y_train = y_train
-        instances = [X_train[i] + [y_train[i]] for i in range(len(X_train))]
+        instances_d = myutils.discretize_data(X_train)
+        instances = [instances_d[i] + [str(y_train[i])] for i in range(len(X_train))]
         attributes = [f"att{i}" for i in range(len(X_train[0]))]
         self.tree = myutils.tdidt(instances, attributes)
+        return instances
 
     def predict(self, X_test):
         """Makes predictions for test instances in X_test.
@@ -68,14 +69,15 @@ class MyDecisionTreeClassifier:
         Returns:
             y_predicted(list of obj): The predicted target y values (parallel to X_test)
         """
-        fallback_label = myutils.majority_class(self.y_train)
+        y_d = [f"{i}" for i in self.y_train]
+        fallback_label = myutils.majority_class(y_d)
         y_predicted = []
-
-        for instance in X_test:
+        X_test_d = myutils.discretize_data(X_test)
+        for instance in X_test_d:
             prediction = myutils.predict_instance(instance, self.tree, fallback_label)
             y_predicted.append(prediction)
         
-        return y_predicted
+        return myutils.convert_str_to_int(y_predicted)
 
     def print_decision_rules(self, attribute_names=None, class_name="class"):
         """Prints the decision rules from the tree in the format
@@ -285,6 +287,7 @@ class MyDummyClassifier:
             self.most_common_label = myutils.most_frequent(y_train)
         elif self.strategy == "stratified":
             self.most_common_label = myutils.calculate_frequency(y_train)
+        return self.most_common_label
 
     def predict(self, X_test):
         """Makes predictions for test instances in X_test.
@@ -340,18 +343,20 @@ class MyNaiveBayesClassifier:
                 and posteriors.
         """
         self.priors = {}
+        X_train_d = myutils.discretize_data(X_train)
+        y_train = myutils.convert_int_to_str(y_train)
         total_instances = len(y_train)
         unique_classes = set(y_train)
         for c in unique_classes:
             self.priors[c] = y_train.count(c) / total_instances
 
         self.posteriors = {}
-        num_features = len(X_train[0])
+        num_features = len(X_train_d[0])
 
         for c in unique_classes:
             self.posteriors[c] = [{} for _ in range(num_features)]
             class_indices = [i for i, label in enumerate(y_train) if label == c]
-            class_feature_values = [X_train[i] for i in class_indices]
+            class_feature_values = [X_train_d[i] for i in class_indices]
             for j in range(num_features):
                 feature_values = [row[j] for row in class_feature_values]
                 value_counts = {}
@@ -371,18 +376,124 @@ class MyNaiveBayesClassifier:
             y_predicted(list of obj): The predicted target y values (parallel to X_test)
         """
         y_predicted = []
-        for instance in X_test:
+        X_test_d = myutils.discretize_data(X_test)
+        most_common_label = max(self.priors, key=self.priors.get)
+
+        for instance in X_test_d:
             class_probabilities = {}
             for c in self.priors:
                 probability = self.priors[c]
                 for j, feature_value in enumerate(instance):
-                    if feature_value in self.posteriors[c][j]:
+                    if j < len(self.posteriors[c]) and feature_value in self.posteriors[c][j]:
                         probability *= self.posteriors[c][j][feature_value]
                     else:
-                        probability *= 0
+                        probability *= 1e-6
                 class_probabilities[c] = probability
-            predicted_class = max(class_probabilities, key=class_probabilities.get)
+            
+            if all(p == 0 for p in class_probabilities.values()):
+                predicted_class = most_common_label
+            else:
+                predicted_class = max(class_probabilities, key=class_probabilities.get)
             y_predicted.append(predicted_class)
-        
-        return y_predicted
 
+        return myutils.convert_str_to_int(y_predicted)
+
+class MyRandomForestClassifier:
+    """
+    Represents a random forest classifier using multiple decision trees.
+
+    Attributes:
+        n_trees (int): Number of trees in the forest.
+        max_features (int): Maximum number of features to consider for each tree.
+        trees (list of MyDecisionTreeClassifier): The ensemble of decision trees in the forest.
+    """
+    def __init__(self, n_trees=10, max_features=None):
+        """
+        Initialize the random forest classifier.
+
+        Args:
+            n_trees (int): Number of trees in the forest.
+            max_features (int): Maximum number of features to consider for each tree. Defaults to None,
+                                which means using all features.
+        """
+        self.n_trees = n_trees
+        self.max_features = max_features
+        self.trees = []
+
+    def fit(self, X_train, y_train):
+        """
+        Train the random forest classifier on the training data.
+
+        Args:
+            X_train (list of list of obj): The training feature data.
+            y_train (list of obj): The training target labels.
+        """
+        n_samples, n_features = len(X_train), len(X_train[0])
+        if self.max_features is None:
+            self.max_features = n_features  # Use all features if not specified
+        
+        self.trees = []
+        for _ in range(self.n_trees):
+            # Bootstrap sampling
+            sampled_indices = [random.randint(0, n_samples - 1) for _ in range(n_samples)]
+            X_bootstrap = [X_train[i] for i in sampled_indices]
+            y_bootstrap = [y_train[i] for i in sampled_indices]
+            
+            # Random feature selection
+            feature_indices = random.sample(range(n_features), self.max_features)
+            
+            # Subset the features
+            X_bootstrap_subset = [[row[i] for i in feature_indices] for row in X_bootstrap]
+            
+            # Train a decision tree
+            tree = MyDecisionTreeClassifier()
+            tree.fit(X_bootstrap_subset, y_bootstrap)
+            
+            # Store the tree and its corresponding feature indices
+            self.trees.append((tree, feature_indices))
+
+    def predict(self, X_test):
+        """
+        Predict the target labels for the test data using majority voting.
+
+        Args:
+            X_test (list of list of obj): The test feature data.
+
+        Returns:
+            list of obj: The predicted target labels.
+        """
+        # Collect predictions from all trees
+        all_predictions = []
+        for tree, feature_indices in self.trees:
+            # Subset test data to match the tree's trained features
+            X_test_subset = [[row[i] for i in feature_indices] for row in X_test]
+            predictions = tree.predict(X_test_subset)
+            all_predictions.append(predictions)
+        
+        # Transpose to get predictions per instance
+        all_predictions = list(zip(*all_predictions))
+        
+        # Majority voting for each instance
+        final_predictions = []
+        for instance_preds in all_predictions:
+            # Count occurrences of each class
+            vote_count = {}
+            for pred in instance_preds:
+                if pred in vote_count:
+                    vote_count[pred] += 1
+                else:
+                    vote_count[pred] = 1
+            
+            # Find the class with the maximum votes
+            majority_vote = max(vote_count, key=vote_count.get)
+            final_predictions.append(majority_vote)
+
+        return myutils.convert_str_to_int(final_predictions)
+
+    def print_forest_summary(self):
+        """
+        Print a summary of the forest including the number of trees and max features used.
+        """
+        print(f"Random Forest Summary:")
+        print(f"- Number of Trees: {self.n_trees}")
+        print(f"- Max Features per Tree: {self.max_features}")

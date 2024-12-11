@@ -486,13 +486,18 @@ def cross_val_predict2(X, y, k=10, stratify=False, random_state=None):
     y_pred_dummy = [None] * len(y)
     y_pred_naive = [None] * len(y)
     y_pred_tree = [None] * len(y) 
+    y_pred_forest = [None] * len(y) 
 
     if stratify:
         folds = me.stratified_kfold_split(X, y, n_splits=k, random_state=random_state, shuffle=True)
     else:
         folds = me.kfold_split(X, n_splits=k, random_state=random_state, shuffle=True)
 
+    i = 0
     for train_indices, test_indices in folds:
+        print(f"Processing fold {i + 1}/{k}...")
+        i += 1
+        
         X_train = [X[i] for i in train_indices]
         y_train = [y[i] for i in train_indices]
         X_test = [X[i] for i in test_indices]
@@ -513,16 +518,21 @@ def cross_val_predict2(X, y, k=10, stratify=False, random_state=None):
         tree.fit(X_train, y_train)
         y_pred_fold_tree = tree.predict(X_test)
 
-        for idx, pred_knn, pred_dummy, pred_naive, pred_tree in zip(
-            test_indices, y_pred_fold_knn, y_pred_fold_dummy, y_pred_fold_naive, y_pred_fold_tree
+        forest = mc.MyRandomForestClassifier()
+        forest.fit(X_train, y_train)
+        y_pred_fold_forest = forest.predict(X_test)
+
+        for idx, pred_knn, pred_dummy, pred_naive, pred_tree, pred_forest in zip(
+            test_indices, y_pred_fold_knn, y_pred_fold_dummy, y_pred_fold_naive, y_pred_fold_tree, y_pred_fold_forest
         ):
         
             y_pred_knn[idx] = pred_knn
             y_pred_dummy[idx] = pred_dummy
             y_pred_naive[idx] = pred_naive
-            y_pred_tree[idx] = pred_knn
+            y_pred_tree[idx] = pred_tree
+            y_pred_forest[idx] = pred_forest
 
-    return y_pred_knn, y_pred_dummy, y_pred_naive, y_pred_tree
+    return y_pred_knn, y_pred_dummy, y_pred_naive, y_pred_tree, y_pred_forest
 
 
 def tdidt(current_instances, available_attributes):
@@ -875,3 +885,70 @@ def bootstrap_method(X, y, classifiers, k=10, random_state=None):
 
     return avg_accuracy, avg_error_rate
 
+def discretize_data(X, num_bins=10):
+    """
+    Discretize the values in X into specified bins.
+
+    Args:
+        X (list of list of float): 2D list of normalized feature values (0 to 1).
+        y (list of int): List of target values (0 or 1).
+        num_bins (int): Number of bins to divide the range [0, 1] into (default is 10).
+
+    Returns:
+        tuple: Discretized X and original y as (X_discretized, y).
+    """
+    # Generate bin edges
+    bin_edges = [i / num_bins for i in range(num_bins + 1)]
+
+    # Discretize X
+    X_discretized = []
+    for instance in X:
+        discretized_instance = []
+        for value in instance:
+            # Find the bin index for the value
+            for i in range(len(bin_edges) - 1):
+                if bin_edges[i] <= value < bin_edges[i + 1]:
+                    discretized_instance.append(str(i + 1))  # Bin index starts at 1
+                    break
+                # Handle edge case where value == 1
+                if value == 1:
+                    discretized_instance.append(str(num_bins))
+        X_discretized.append(discretized_instance)
+
+    return X_discretized
+
+def convert_str_to_int(str_list):
+    """
+    Convert a list of strings to integers.
+
+    Args:
+        str_list (list of str): A list containing strings that represent integers.
+
+    Returns:
+        list of int: A list where each string is converted to an integer.
+    
+    Raises:
+        ValueError: If any string in the list cannot be converted to an integer.
+    """
+    try:
+        return [int(val) for val in str_list]
+    except ValueError as e:
+        raise ValueError(f"List contains non-integer string: {e}")
+    
+def convert_int_to_str(str_list):
+    """
+    Convert a list of strings to integers.
+
+    Args:
+        str_list (list of str): A list containing strings that represent integers.
+
+    Returns:
+        list of int: A list where each string is converted to an integer.
+    
+    Raises:
+        ValueError: If any string in the list cannot be converted to an integer.
+    """
+    try:
+        return [str(val) for val in str_list]
+    except ValueError as e:
+        raise ValueError(f"List contains non-string integer: {e}")
