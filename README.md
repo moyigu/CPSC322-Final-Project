@@ -26,8 +26,10 @@ The primary objective of this project is to analyze NEO data and build machine l
 
 ## Instructions to Run the Project:
   Step1: Clone the repo
+  
   Step2: Run Unittest(test_myclassifiers.py)
     - Run pytest --verbose test_myclassifiers.py
+    
   Step3: Connect Web App(website.py)
     - Run python website.py
     - Copy the link that shows on the terminal and paste it on the website
